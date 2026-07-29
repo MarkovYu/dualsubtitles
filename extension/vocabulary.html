@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vocabulary · Dual Subtitles</title>
+  <link rel="stylesheet" href="vocabulary.css">
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </span>
+        <div>
+          <h1>Vocabulary</h1>
+          <p class="sub">Words you saved while watching.</p>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="exportCsv" class="btn ghost">Export CSV</button>
+        <button id="exportJson" class="btn ghost">Export JSON</button>
+        <button id="clearAll" class="btn danger">Clear all</button>
+      </div>
+    </header>
+
+    <div id="stats" class="stats"></div>
+
+    <div class="toolbar">
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="search" type="search" placeholder="Search word, translation, or context">
+      </div>
+      <select id="sourceFilter">
+        <option value="">All source languages</option>
+      </select>
+      <select id="targetFilter">
+        <option value="">All target languages</option>
+      </select>
+    </div>
+
+    <main id="list" class="list" aria-live="polite"></main>
+  </div>
+
+  <script src="vocabulary.js"></script>
+</body>
+</html>

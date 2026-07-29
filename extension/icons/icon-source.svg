@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Dual Subtitles icon">
+  <!-- Larger dark tile with two centered caption bars (original over translation). -->
+  <rect x="6" y="6" width="116" height="116" rx="29" fill="#12151d"/>
+  <rect x="17" y="21" width="94" height="86" rx="15" fill="none" stroke="#d6e6ff" stroke-opacity=".3" stroke-width="5"/>
+  <rect x="28" y="57" width="72" height="16" rx="8" fill="#4a86d4"/>
+  <rect x="39" y="81" width="50" height="16" rx="8" fill="#d6e6ff"/>
+</svg>

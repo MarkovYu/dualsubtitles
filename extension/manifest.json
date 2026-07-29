@@ -1,0 +1,84 @@
+{
+  "manifest_version": 3,
+  "name": "Dual Subtitles: Learn Languages with Movies",
+  "short_name": "Dual Subtitles",
+  "version": "1.25.26",
+  "description": "Dual subtitles for Prime Video & Kino.pub with Chrome built-in translation, clickable words, and a private vocabulary book.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://kino.pub/*",
+    "https://*.kino.pub/*",
+    "https://kino.watch/*",
+    "https://*.kino.watch/*",
+    "https://cdn2site.com/*",
+    "https://*.cdn2site.com/*",
+    "https://digital-cdn.net/*",
+    "https://*.digital-cdn.net/*",
+    "https://www.primevideo.com/*",
+    "https://*.primevideo.com/*",
+    "https://www.amazon.de/*",
+    "https://www.amazon.com/*",
+    "https://www.amazon.co.uk/*",
+    "https://api-free.deepl.com/*",
+    "https://api.deepl.com/*",
+    "https://libretranslate.de/*",
+    "https://translate.argosopentech.com/*",
+    "https://api.mymemory.translated.net/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://kino.pub/item/view/*",
+        "https://*.kino.pub/item/view/*",
+        "https://kino.watch/item/view/*",
+        "https://*.kino.watch/item/view/*",
+        "https://www.primevideo.com/*",
+        "https://*.primevideo.com/*",
+        "https://www.amazon.de/*",
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "vocabulary.html",
+        "vocabulary.js",
+        "vocabulary.css",
+        "inject.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "Dual Subtitles: Learn Languages",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  }
+}
