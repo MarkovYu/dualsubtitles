@@ -10,6 +10,8 @@ It is built for language learners who want to stay inside the video player: clic
 
 - Amazon Prime Video
 - Kino.pub
+- YouTube
+- HDRezka
 
 You can vote for more supported websites on the project website:
 https://www.y-markov.com/dual-subtitles/vote
@@ -52,7 +54,7 @@ LICENSE                    License
 2. Enable Developer mode.
 3. Click **Load unpacked**.
 4. Select the `extension` folder.
-5. Open Amazon Prime Video or Kino.pub and start a video with subtitles.
+5. Open Amazon Prime Video, Kino.pub, YouTube, or a supported HDRezka / Rezka player page and start a video with subtitles.
 
 After editing the extension, reload it on `chrome://extensions` and refresh the video page.
 
@@ -72,4 +74,4 @@ The website is static HTML/CSS. Open `website/index.html` locally or publish the
 
 ## Independent Project
 
-Dual Subtitles is an independent project and is not affiliated with, endorsed by, or sponsored by Amazon, Prime Video, Kino.pub, DeepL, LibreTranslate, or MyMemory.
+Dual Subtitles is an independent project and is not affiliated with, endorsed by, or sponsored by Amazon, Prime Video, Google, YouTube, Kino.pub, HDRezka, Rezka, DeepL, LibreTranslate, or MyMemory.
