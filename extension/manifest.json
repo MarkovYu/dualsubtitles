@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "Dual Subtitles: Learn Languages with Movies",
-  "short_name": "Dual Subtitles",
-  "version": "1.25.37",
-  "description": "Dual subtitles for YouTube, Prime Video, Kino.pub & Rezka with Chrome translation, clickable words, and vocabulary.",
+  "name": "__MSG_extName__",
+  "short_name": "__MSG_extShortName__",
+  "version": "1.25.38",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -119,7 +120,7 @@
     }
   ],
   "action": {
-    "default_title": "Dual Subtitles: Learn Languages",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
