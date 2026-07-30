@@ -8,20 +8,44 @@
   if (window.__KPDS_INJECT__) return;
   window.__KPDS_INJECT__ = true;
 
+  const stashSubtitle = (url, text, lang) => {
+    try {
+      const root = document.documentElement || document.head || document.body;
+      if (!root) return;
+      let box = document.getElementById("kpds-capture-buffer");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "kpds-capture-buffer";
+        box.hidden = true;
+        box.style.display = "none";
+        root.appendChild(box);
+      }
+      const item = document.createElement("div");
+      item.className = "kpds-captured-sub";
+      item.setAttribute("data-url", url || "inline");
+      item.setAttribute("data-lang", lang || "");
+      item.textContent = text || "";
+      box.appendChild(item);
+      while (box.children.length > 20) box.firstElementChild?.remove();
+    } catch (e) {}
+  };
+
   const post = (url, text, lang) => {
+    stashSubtitle(url, text, lang);
     try { window.postMessage({ __kpds: true, type: "sub", url, text, lang: lang || "" }, "*"); } catch (e) {}
   };
   const dbg = (msg) => {
     try { window.postMessage({ __kpds: true, type: "dbg", msg: String(msg) }, "*"); } catch (e) {}
   };
 
-  const SUB_EXT = /\.(dfxp|ttml2?|vtt)(\?|$)/i;
-  const SUB_HINT = /subtitle|caption|timedtext|dfxp|ttml/i;
+  const SUB_EXT = /\.(dfxp|ttml2?|vtt|srt|ass|ssa)(?=$|[?#&"',)\]\s])/i;
+  const SUB_HINT = /subtitle|subtitles|caption|timedtext|dfxp|ttml/i;
   const MANIFEST_HINT = /playback|resource|getplayback|presentation|subtitle|timedtext|catalog\/Get/i;
 
   const isTimedText = (t) =>
     typeof t === "string" && t.length > 20 &&
-    (/<tt[\s>]/i.test(t) || /\bWEBVTT\b/.test(t) || /-->/.test(t));
+    (/<tt[\s>]/i.test(t) || /\bWEBVTT\b/.test(t) || /-->/.test(t) ||
+      /^\s*\[Script Info\]/mi.test(t) || /^\s*\[Events\]/mi.test(t));
 
   const langOf = (t) => {
     const m = /xml:lang\s*=\s*["']([a-zA-Z-]+)["']/.exec(t || "");
@@ -29,6 +53,7 @@
   };
 
   const seen = new Set();
+  const scannedScripts = new WeakSet();
   const origFetch = window.fetch;
   window.__kpdsFetch = origFetch;
 
@@ -59,7 +84,8 @@
   const collectUrls = (obj, depth, out) => {
     if (!obj || depth > 5) return;
     if (typeof obj === "string") {
-      if (/^https?:/i.test(obj) && (SUB_EXT.test(obj) || SUB_HINT.test(obj))) out.push(obj);
+      const url = candidateUrl(obj);
+      if (url && (SUB_EXT.test(url) || SUB_HINT.test(url))) out.push(url);
       return;
     }
     if (Array.isArray(obj)) {
@@ -72,8 +98,9 @@
       for (const k in obj) {
         let v;
         try { v = obj[k]; } catch (e) { continue; }
-        if (typeof v === "string" && META_URL_HINT.test(k) && /^https?:/i.test(v)) {
-          if (SUB_EXT.test(v) || SUB_HINT.test(v) || objHasSubtitleHint) out.push(v);
+        if (typeof v === "string" && META_URL_HINT.test(k)) {
+          const url = candidateUrl(v);
+          if (url && (SUB_EXT.test(url) || SUB_HINT.test(url) || objHasSubtitleHint)) out.push(url);
         } else {
           collectUrls(v, depth + 1, out);
         }
@@ -132,6 +159,64 @@
         at: Date.now()
       }));
       for (const old of nodes.slice(0, Math.max(0, nodes.length - 8))) old.remove();
+    } catch (e) {}
+  };
+
+  const textFromRuns = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (Array.isArray(value.runs)) return value.runs.map(r => r.text || "").join("").trim();
+    return value.simpleText || "";
+  };
+
+  const youtubeCaptionUrl = (url) => {
+    try {
+      const u = new URL(url, location.href);
+      u.searchParams.set("fmt", "json3");
+      return u.toString();
+    } catch (e) {
+      return url;
+    }
+  };
+
+  let lastYoutubeMetaKey = "";
+  let lastYoutubeMetaAt = 0;
+  const postYoutubeMeta = () => {
+    try {
+      const response = window.ytInitialPlayerResponse || window.ytplayer?.config?.args?.raw_player_response || window.ytplayer?.bootstrapPlayerResponse;
+      const renderer = response?.captions?.playerCaptionsTracklistRenderer;
+      const tracksRaw = renderer?.captionTracks || [];
+      if (!Array.isArray(tracksRaw) || !tracksRaw.length) return;
+
+      const seenTracks = new Set();
+      const tracks = tracksRaw
+        .filter(t => t?.baseUrl && !t.translationLanguage)
+        .map((t, idx) => {
+          const lang = t.languageCode || "";
+          const auto = t.kind === "asr" ? " auto" : "";
+          const name = textFromRuns(t.name) || t.languageName?.simpleText || t.languageCode || `Subtitles ${idx + 1}`;
+          return {
+            url: youtubeCaptionUrl(t.baseUrl),
+            lang,
+            label: `${name}${auto}`,
+            key: `${t.vssId || ""}|${lang}|${name}|${auto}`
+          };
+        })
+        .filter(t => {
+          if (seenTracks.has(t.key)) return false;
+          seenTracks.add(t.key);
+          delete t.key;
+          return true;
+        });
+      if (!tracks.length) return;
+
+      const key = tracks.map(t => `${t.label}|${t.url}`).join("\n");
+      const now = Date.now();
+      if (key === lastYoutubeMetaKey && now - lastYoutubeMetaAt < 3000) return;
+      lastYoutubeMetaKey = key;
+      lastYoutubeMetaAt = now;
+      window.postMessage({ __kpds: true, type: "yt-meta", tracks }, "*");
+      dbg(`youtube metadata ${tracks.length} tracks`);
     } catch (e) {}
   };
 
@@ -195,23 +280,55 @@
     }
   };
 
+  const normalizeUrlText = (text) => String(text || "")
+    .replace(/\\\//g, "/")
+    .replace(/&amp;/g, "&")
+    .replace(/\\u0026/gi, "&")
+    .replace(/\\u003d/gi, "=")
+    .replace(/\\u003f/gi, "?");
+
+  const candidateUrl = (raw) => {
+    let url = normalizeUrlText(raw)
+      .replace(/^[\s"'([{]+/g, "")
+      .replace(/[\s"'.,;)\]}]+$/g, "");
+    try { url = decodeURIComponent(url); } catch (e) {}
+    try {
+      if (/^https?:\/\//i.test(url)) return url;
+      if (/^\/\//.test(url)) return location.protocol + url;
+      if (/^\//.test(url)) return new URL(url, location.href).toString();
+    } catch (e) {}
+    return "";
+  };
+
   // Fetch a candidate subtitle URL ourselves (page context, so same CORS the
   // player has). Use the original fetch to avoid re-entering our hook.
   const grab = (url, langHint) => {
     if (!url || seen.has(url)) return;
     try {
-      (origFetch || window.fetch).call(window, url, { credentials: "omit" })
+      (origFetch || window.fetch).call(window, url, { credentials: "include" })
         .then(r => r.text())
         .then(t => handleText(url, t, langHint))
         .catch(() => {});
     } catch (e) {}
   };
 
+  const scanTextForSubtitleUrls = (text, langHint) => {
+    const src = normalizeUrlText(text);
+    const re = /(?:https?:)?\/\/[^\s"',<>\\)\]]+|\/[^\s"',<>\\)\]]+?\.(?:dfxp|ttml2?|vtt|srt|ass|ssa)(?:[?#][^\s"',<>\\)\]]*)?/gi;
+    let m;
+    while ((m = re.exec(src))) {
+      const url = candidateUrl(m[0]);
+      if (SUB_EXT.test(url) || SUB_HINT.test(url)) grab(url, langHint);
+    }
+  };
+
   // Walk a JSON object looking for subtitle URLs / track descriptors.
   const scanJson = (obj, depth) => {
     if (!obj || depth > 7) return;
     if (typeof obj === "string") {
-      if (/^https?:/.test(obj) && (SUB_EXT.test(obj) || SUB_HINT.test(obj))) grab(obj);
+      const url = candidateUrl(obj);
+      if (url && (SUB_EXT.test(url) || SUB_HINT.test(url))) grab(url);
+      else if (SUB_HINT.test(obj) || SUB_EXT.test(obj)) scanTextForSubtitleUrls(obj);
       return;
     }
     if (Array.isArray(obj)) { for (const v of obj) scanJson(v, depth + 1); return; }
@@ -219,12 +336,65 @@
       const url = obj.url || obj.uri || obj.src || obj.subtitleUrl;
       const lang = obj.languageCode || obj.language || obj.lang || obj.displayName || obj.langCode;
       const typeStr = JSON.stringify(obj.type || obj.subtype || obj.format || "");
-      if (typeof url === "string" &&
-          (SUB_EXT.test(url) || SUB_HINT.test(url) || /subtitle|caption|timedtext|dfxp|ttml/i.test(typeStr))) {
-        grab(url, typeof lang === "string" ? lang : "");
+      const resolvedUrl = typeof url === "string" ? candidateUrl(url) : "";
+      if (resolvedUrl &&
+          (SUB_EXT.test(resolvedUrl) || SUB_HINT.test(resolvedUrl) || /subtitle|caption|timedtext|dfxp|ttml|srt|ass|ssa/i.test(typeStr))) {
+        grab(resolvedUrl, typeof lang === "string" ? lang : "");
       }
+      try {
+        const preview = JSON.stringify(obj).slice(0, 12000);
+        if (SUB_HINT.test(preview) || SUB_EXT.test(preview)) {
+          scanTextForSubtitleUrls(preview, typeof lang === "string" ? lang : "");
+        }
+      } catch (e) {}
       for (const k in obj) { try { scanJson(obj[k], depth + 1); } catch (e) {} }
     }
+  };
+
+  const scanPlayerConfig = (value) => {
+    try { scanJson(value, 0); } catch (e) {}
+    if (typeof value === "string") scanTextForSubtitleUrls(value);
+    else {
+      try {
+        const text = JSON.stringify(value);
+        if (SUB_HINT.test(text) || SUB_EXT.test(text)) scanTextForSubtitleUrls(text);
+      } catch (e) {}
+    }
+  };
+
+  const scanInlineScripts = (root = document) => {
+    try {
+      const scripts = [];
+      if (root.matches?.("script")) scripts.push(root);
+      if (root.querySelectorAll) scripts.push(...root.querySelectorAll("script"));
+      for (const script of scripts) {
+        if (scannedScripts.has(script)) continue;
+        scannedScripts.add(script);
+        const text = script.textContent || "";
+        if (text && (SUB_HINT.test(text) || SUB_EXT.test(text) || /Playerjs/i.test(text))) {
+          scanTextForSubtitleUrls(text);
+        }
+      }
+    } catch (e) {}
+  };
+
+  let wrappedPlayerjs = null;
+  const wrapPlayerjsConstructor = () => {
+    const Orig = window.Playerjs;
+    if (typeof Orig !== "function" || Orig === wrappedPlayerjs || Orig.__kpdsWrapped) return;
+    try {
+      const Wrapped = function (...args) {
+        for (const arg of args) scanPlayerConfig(arg);
+        if (new.target) return Reflect.construct(Orig, args, new.target);
+        return Orig.apply(this, args);
+      };
+      Object.setPrototypeOf(Wrapped, Orig);
+      Wrapped.prototype = Orig.prototype;
+      Wrapped.__kpdsWrapped = true;
+      wrappedPlayerjs = Wrapped;
+      window.Playerjs = Wrapped;
+      dbg("PlayerJS constructor wrapped");
+    } catch (e) {}
   };
 
   // ---- fetch hook ----
@@ -237,12 +407,21 @@
         try {
           const ct = ((res.headers && res.headers.get && res.headers.get("content-type")) || "").toLowerCase();
           const urlMatch = url && (SUB_EXT.test(url) || SUB_HINT.test(url));
-          const ctText = /ttml|dfxp|vtt|xml|text\/plain/.test(ct);
+          const ctText = /ttml|dfxp|vtt|srt|ass|ssa|xml|text\/plain/.test(ct);
           const ctJson = /json/.test(ct);
           if (urlMatch || ctText) {
-            res.clone().text().then(t => handleText(url, t)).catch(() => {});
+            res.clone().text().then(t => {
+              handleText(url, t);
+              if (!isTimedText(t) && (SUB_HINT.test(t) || SUB_EXT.test(t) || /Playerjs/i.test(t))) {
+                scanTextForSubtitleUrls(t);
+              }
+            }).catch(() => {});
           } else if (ctJson && (!url || MANIFEST_HINT.test(url))) {
             res.clone().json().then(j => scanJson(j, 0)).catch(() => {});
+          } else if (/javascript|html|text\/plain/.test(ct) || (url && /ajax|cdn|series|subtitle|player/i.test(url))) {
+            res.clone().text().then(t => {
+              if (SUB_HINT.test(t) || SUB_EXT.test(t) || /Playerjs/i.test(t)) scanTextForSubtitleUrls(t);
+            }).catch(() => {});
           }
         } catch (e) {}
       }).catch(() => {});
@@ -266,10 +445,15 @@
           const ct = ((this.getResponseHeader && this.getResponseHeader("content-type")) || "").toLowerCase();
           const text = (this.responseType === "" || this.responseType === "text") ? this.responseText : "";
           if (!text) return;
-          if ((url && (SUB_EXT.test(url) || SUB_HINT.test(url))) || /ttml|dfxp|vtt|xml|text\/plain/.test(ct)) {
+          if ((url && (SUB_EXT.test(url) || SUB_HINT.test(url))) || /ttml|dfxp|vtt|srt|ass|ssa|xml|text\/plain/.test(ct)) {
             handleText(url, text);
+            if (!isTimedText(text) && (SUB_HINT.test(text) || SUB_EXT.test(text) || /Playerjs/i.test(text))) {
+              scanTextForSubtitleUrls(text);
+            }
           } else if (/json/.test(ct) && (!url || MANIFEST_HINT.test(url))) {
             try { scanJson(JSON.parse(text), 0); } catch (e) {}
+          } else if (/javascript|html|text\/plain/.test(ct) || (url && /ajax|cdn|series|subtitle|player/i.test(url))) {
+            if (SUB_HINT.test(text) || SUB_EXT.test(text) || /Playerjs/i.test(text)) scanTextForSubtitleUrls(text);
           }
         } catch (e) {}
       });
@@ -278,8 +462,23 @@
   }
 
   postPrimeMeta();
+  postYoutubeMeta();
   postPrimeTime();
+  wrapPlayerjsConstructor();
+  scanInlineScripts();
+  try {
+    new MutationObserver((records) => {
+      wrapPlayerjsConstructor();
+      for (const record of records) {
+        for (const node of record.addedNodes || []) {
+          if (node?.nodeType === 1) scanInlineScripts(node);
+        }
+      }
+    }).observe(document.documentElement || document, { childList: true, subtree: true });
+  } catch (e) {}
   setInterval(postPrimeMeta, 1000);
+  setInterval(postYoutubeMeta, 1000);
   setInterval(postPrimeTime, 500);
+  setInterval(wrapPlayerjsConstructor, 1000);
   dbg("subtitle hooks installed");
 })();

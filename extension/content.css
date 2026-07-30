@@ -383,6 +383,14 @@
   user-select: text;
 }
 #kpds-overlay:empty { display: none; }
+#movie_player #kpds-overlay.kpds-youtube-overlay,
+ytd-player #kpds-overlay.kpds-youtube-overlay {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  bottom: 11%;
+  z-index: 75;
+}
 #kpds-overlay .kpds-line { display: block; }
 #kpds-overlay .kpds-line-trans {
   margin-top: 4px;
@@ -515,7 +523,27 @@
    clickable text). opacity keeps their innerText readable for mirroring. */
 html.kpds-hide-native .atvwebplayersdk-captions-text,
 html.kpds-hide-native .atvwebplayersdk-captions-overlay,
-html.kpds-hide-native media-captions.player-captions {
+html.kpds-hide-native media-captions.player-captions,
+html.kpds-hide-native .ytp-caption-window-container,
+html.kpds-hide-native .caption-window,
+html.kpds-hide-native .ytp-caption-segment,
+html.kpds-hide-native #cdnplayer [id^="pjs_"][id$="_subtitle"],
+html.kpds-hide-native #player [id^="pjs_"][id$="_subtitle"],
+html.kpds-hide-native [id^="pjs_"][id$="_subtitle"],
+html.kpds-hide-native #cdnplayer [class*="subtitle"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native #cdnplayer [class*="caption"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native #cdnplayer [class*="subtitles"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native #player [class*="subtitle"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native #player [class*="caption"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native #player [class*="subtitles"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native .pjs-subtitle,
+html.kpds-hide-native .pjs-subtitles,
+html.kpds-hide-native .pjs_subtitle,
+html.kpds-hide-native .pjs_subtitles,
+html.kpds-hide-native .pjs-caption,
+html.kpds-hide-native .pjs-captions,
+html.kpds-hide-native [class*="pjs"][class*="subtitle"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]),
+html.kpds-hide-native [class*="pjs"][class*="caption"]:not([class*="button"]):not([class*="menu"]):not([class*="control"]) {
   opacity: 0 !important;
 }
 

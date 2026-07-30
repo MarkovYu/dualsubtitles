@@ -71,6 +71,70 @@
         defaultMode: "site"
       };
     }
+    if (/(^|\.)youtube\.com$/.test(host) || /(^|\.)youtu\.be$/.test(host)) {
+      return {
+        id: "youtube",
+        name: "YouTube",
+        videoSelectors: ["#movie_player video", ".html5-main-video", "video"],
+        captionSelectors: [
+          ".ytp-caption-window-container",
+          ".caption-window",
+          ".ytp-caption-segment"
+        ],
+        nativeCaptionSelector: ".ytp-caption-window-container, .caption-window, .ytp-caption-segment",
+        siteTracks: false,
+        trackSource: "mirror",
+        defaultMode: "mirror"
+      };
+    }
+    if (/(^|\.)hdrezka\.[a-z.]+$/.test(host) || /(^|\.)rezka\.[a-z.]+$/.test(host) || /(^|\.)hello-rezka\.tv$/.test(host)) {
+      return {
+        id: "hdrezka",
+        name: "HDRezka",
+        videoSelectors: ["#cdnplayer video", "#player video", ".pjs video", "video"],
+        captionSelectors: [
+          "#cdnplayer [id^='pjs_'][id$='_subtitle']",
+          "#player [id^='pjs_'][id$='_subtitle']",
+          "[id^='pjs_'][id$='_subtitle']",
+          "#cdnplayer [class*='subtitle']",
+          "#cdnplayer [class*='caption']",
+          "#cdnplayer [class*='subtitles']",
+          "#player [class*='subtitle']",
+          "#player [class*='caption']",
+          "#player [class*='subtitles']",
+          ".pjs-subtitle",
+          ".pjs-subtitles",
+          ".pjs_subtitle",
+          ".pjs_subtitles",
+          ".pjs-caption",
+          ".pjs-captions",
+          "[class*='pjs'][class*='subtitle']",
+          "[class*='pjs'][class*='caption']"
+        ],
+        nativeCaptionSelector: [
+          "#cdnplayer [id^='pjs_'][id$='_subtitle']",
+          "#player [id^='pjs_'][id$='_subtitle']",
+          "[id^='pjs_'][id$='_subtitle']",
+          "#cdnplayer [class*='subtitle']",
+          "#cdnplayer [class*='caption']",
+          "#cdnplayer [class*='subtitles']",
+          "#player [class*='subtitle']",
+          "#player [class*='caption']",
+          "#player [class*='subtitles']",
+          ".pjs-subtitle",
+          ".pjs-subtitles",
+          ".pjs_subtitle",
+          ".pjs_subtitles",
+          ".pjs-caption",
+          ".pjs-captions",
+          "[class*='pjs'][class*='subtitle']",
+          "[class*='pjs'][class*='caption']"
+        ].join(", "),
+        siteTracks: true,
+        trackSource: "capture",
+        defaultMode: "site"
+      };
+    }
     return {
       id: "kinopub",
       name: "Kino.pub",
@@ -232,6 +296,10 @@
 
   function videoCandidates() {
     const found = [];
+    if (SITE.id === "youtube") {
+      const main = document.querySelector("#movie_player video, ytd-player video");
+      if (main) found.push(main);
+    }
     for (const sel of SITE.videoSelectors) {
       for (const v of $$(sel)) {
         if (v && !found.includes(v)) found.push(v);
@@ -258,6 +326,7 @@
   function getVideo() {
     const videos = videoCandidates();
     if (!videos.length) return null;
+    if (SITE.id === "youtube" && videos[0]?.closest("#movie_player, ytd-player")) return videos[0];
 
     let best = videos[0];
     let bestScore = videoScore(best);
@@ -278,6 +347,18 @@
   // background preview before the user presses play.
   function isPrimaryPlayback(video) {
     if (!video) return false;
+    if (SITE.id === "youtube") {
+      try {
+        const key = contentKey();
+        if (!key) return false;
+        if (!video.closest("#movie_player, ytd-player")) return false;
+        const r = video.getBoundingClientRect();
+        if (r.width < 240 || r.height < 135) return false;
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
     if (SITE.id !== "prime") return true;
     try {
       // Fail open: show subtitles unless this is clearly the detail-page hero
@@ -298,16 +379,26 @@
     return document.fullscreenElement || document.webkitFullscreenElement || document.documentElement;
   }
 
+  function getYoutubePlayerRoot() {
+    if (SITE.id !== "youtube") return null;
+    return document.querySelector("#movie_player") ||
+      document.querySelector("#player-container #player") ||
+      document.querySelector("ytd-player") ||
+      null;
+  }
+
   function ensureOverlay() {
     let overlay = document.getElementById("kpds-overlay");
-    const root = getFullscreenRoot();
+    const ytRoot = getYoutubePlayerRoot();
+    const root = ytRoot || getFullscreenRoot();
     if (!overlay) {
       overlay = document.createElement("div");
       overlay.id = "kpds-overlay";
     }
     if (overlay.parentNode !== root) root.appendChild(overlay);
+    overlay.classList.toggle("kpds-youtube-overlay", !!ytRoot && !document.fullscreenElement && !document.webkitFullscreenElement);
     overlay.style.fontSize = `${state.size}px`;
-    overlay.style.bottom = `${state.bottom}vh`;
+    overlay.style.bottom = ytRoot ? `${Math.max(8, Number(state.bottom || 11))}%` : `${state.bottom}vh`;
     return overlay;
   }
 
@@ -389,6 +480,14 @@
   // Returns "" when no title id is present — an empty key never triggers a
   // reset, so ref-parameter / player-URL noise won't wipe a loaded track.
   function contentKey() {
+    if (SITE.id === "youtube") {
+      try {
+        if (location.pathname.startsWith("/shorts/")) return location.pathname.split("/")[2] || "";
+        return new URL(location.href).searchParams.get("v") || "";
+      } catch {
+        return "";
+      }
+    }
     const m = location.href.match(/\/(?:detail|watch)\/([A-Za-z0-9]{8,})/i)
       || location.href.match(/[?&]gti=([A-Za-z0-9._-]+)/i);
     return m ? m[1] : "";
@@ -454,7 +553,7 @@
   }
 
   function nativeCaptionsPresent() {
-    return !!document.querySelector(".atvwebplayersdk-captions-text, [class*='captions-text']");
+    return !!document.querySelector(SITE.nativeCaptionSelector || ".atvwebplayersdk-captions-text, [class*='captions-text']");
   }
 
   // Bring subtitles back for the current media: first via capture/auto-load,
@@ -517,7 +616,7 @@
     state.loadSeq++;
     state.mediaSrc = (v && v.currentSrc) || "";
     if (state.mode === "mirror") state.mode = SITE.defaultMode;
-    document.documentElement.classList.remove("kpds-hide-native");
+    document.documentElement.classList.toggle("kpds-hide-native", state.mode === "mirror");
     state.capturedTracks = state.capturedTracks.filter(t => !t.src || t.src === state.mediaSrc);
     renderSubtitle("");
     refreshTrackList();
@@ -714,6 +813,62 @@
     return cues;
   }
 
+  function decodeHtmlText(text) {
+    return String(text || "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\s+\n/g, "\n")
+      .trim();
+  }
+
+  function parseYoutubeJson3(text, baseOffset = 0) {
+    const cues = [];
+    let data;
+    try { data = JSON.parse(text); } catch { return cues; }
+    const events = Array.isArray(data?.events) ? data.events : [];
+    for (const ev of events) {
+      const segs = Array.isArray(ev?.segs) ? ev.segs : [];
+      const cueText = decodeHtmlText(segs.map(s => s?.utf8 || "").join(""));
+      if (!cueText) continue;
+      const start = Number(ev.tStartMs || 0) / 1000 + baseOffset;
+      const duration = Number(ev.dDurationMs || 0) / 1000;
+      const end = start + (duration > 0 ? duration : 3);
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        cues.push({ start, end, text: cueText });
+      }
+    }
+    cues.sort((a, b) => a.start - b.start);
+    return cues;
+  }
+
+  function parseYoutubeTranscriptXml(text, baseOffset = 0) {
+    const cues = [];
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(text, "text/xml");
+    } catch {
+      return cues;
+    }
+    const nodes = [...doc.getElementsByTagName("text")];
+    for (const node of nodes) {
+      const start = Number(node.getAttribute("start") || 0) + baseOffset;
+      const dur = Number(node.getAttribute("dur") || 0);
+      const cueText = decodeHtmlText(node.textContent || "");
+      if (cueText && Number.isFinite(start)) {
+        cues.push({ start, end: start + (dur > 0 ? dur : 3), text: cueText });
+      }
+    }
+    cues.sort((a, b) => a.start - b.start);
+    return cues;
+  }
+
   function parseTtmlTime(v, tickRate, frameRate) {
     v = String(v || "").trim();
     if (/^\d+(\.\d+)?s$/i.test(v)) return parseFloat(v);
@@ -807,9 +962,89 @@
     return cues;
   }
 
+  function parseAssTime(value) {
+    const m = String(value || "").trim().match(/^(\d+):(\d{2}):(\d{2})\.(\d{1,2})$/);
+    if (!m) return NaN;
+    return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) + Number((m[4] || "0").padEnd(2, "0")) / 100;
+  }
+
+  function cleanAssText(text) {
+    return String(text || "")
+      .replace(/\{[^}]*\}/g, "")
+      .replace(/\\[Nn]/g, "\n")
+      .replace(/\\h/g, " ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/[ \t]+\n/g, "\n")
+      .trim();
+  }
+
+  function parseAss(text, baseOffset = 0) {
+    const cues = [];
+    let inEvents = false;
+    let fields = [];
+
+    for (const rawLine of String(text || "").replace(/\r/g, "").split("\n")) {
+      const line = rawLine.trim();
+      if (/^\[Events\]/i.test(line)) {
+        inEvents = true;
+        continue;
+      }
+      if (/^\[/.test(line)) {
+        inEvents = false;
+        continue;
+      }
+      if (!inEvents) continue;
+
+      if (/^Format:/i.test(line)) {
+        fields = line
+          .slice(line.indexOf(":") + 1)
+          .split(",")
+          .map(s => s.trim().toLowerCase());
+        continue;
+      }
+
+      if (!/^Dialogue:/i.test(line)) continue;
+      const body = line.slice(line.indexOf(":") + 1);
+      const parts = body.split(",");
+      let start = NaN;
+      let end = NaN;
+      let cueText = "";
+
+      const textIndex = fields.indexOf("text");
+      const startIndex = fields.indexOf("start");
+      const endIndex = fields.indexOf("end");
+      if (fields.length && textIndex >= 0 && startIndex >= 0 && endIndex >= 0 && parts.length > textIndex) {
+        start = parseAssTime(parts[startIndex]) + baseOffset;
+        end = parseAssTime(parts[endIndex]) + baseOffset;
+        cueText = cleanAssText(parts.slice(textIndex).join(","));
+      } else if (parts.length >= 10) {
+        start = parseAssTime(parts[1]) + baseOffset;
+        end = parseAssTime(parts[2]) + baseOffset;
+        cueText = cleanAssText(parts.slice(9).join(","));
+      }
+
+      if (cueText && Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        cues.push({ start, end, text: cueText });
+      }
+    }
+
+    cues.sort((a, b) => a.start - b.start);
+    return cues;
+  }
+
   function parseSubtitle(text, baseOffset = 0) {
-    if (/<tt[\s>]/i.test(text)) return parseTtml(text, baseOffset);
-    return parseSrtOrVtt(text, baseOffset);
+    const raw = String(text || "").trim();
+    if (/^\{/.test(raw) && /"events"\s*:/.test(raw)) return parseYoutubeJson3(raw, baseOffset);
+    if (/^\s*<transcript[\s>]/i.test(raw)) return parseYoutubeTranscriptXml(raw, baseOffset);
+    if (/<tt[\s>]/i.test(raw)) return parseTtml(raw, baseOffset);
+    if (/^\s*\[Script Info\]/mi.test(raw) || /^\s*\[Events\]/mi.test(raw)) return parseAss(raw, baseOffset);
+    return parseSrtOrVtt(raw, baseOffset);
   }
 
   function parseHlsPlaylist(text, baseUrl) {
@@ -884,7 +1119,33 @@
       return cues;
     }
 
-    return parseSubtitle(text, 0);
+    let cues = parseSubtitle(text, 0);
+    if (cues.length || SITE.id !== "youtube") return cues;
+
+    const variants = [];
+    try {
+      const u = new URL(url, location.href);
+      for (const fmt of ["json3", "vtt", "srv3"]) {
+        const copy = new URL(u.toString());
+        copy.searchParams.set("fmt", fmt);
+        variants.push(copy.toString());
+      }
+      const xml = new URL(u.toString());
+      xml.searchParams.delete("fmt");
+      variants.push(xml.toString());
+    } catch (e) {}
+
+    const tried = new Set([normalizeTrackUrl(url)]);
+    for (const variant of variants) {
+      const key = normalizeTrackUrl(variant);
+      if (tried.has(key)) continue;
+      tried.add(key);
+      const altText = await fetchTextViaBg(variant);
+      cues = parseSubtitle(altText, 0);
+      if (cues.length) return cues;
+    }
+
+    return cues;
   }
 
   function activeCueAt(time) {
@@ -903,17 +1164,93 @@
     return Number.isFinite(video?.currentTime) ? video.currentTime : 0;
   }
 
+  function textFromCue(cue) {
+    const text = cue?.text || "";
+    return String(text)
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\[[^\]]+\]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function activeTextTrackCaptions(video) {
+    if (!video?.textTracks?.length) return "";
+    const lines = [];
+    for (const track of Array.from(video.textTracks)) {
+      if (!/subtitles|captions/i.test(track.kind || "")) continue;
+      if (!track.activeCues?.length) continue;
+      for (const cue of Array.from(track.activeCues)) {
+        const text = textFromCue(cue);
+        if (text) lines.push(text);
+      }
+    }
+    return [...new Set(lines)].join("\n").trim();
+  }
+
+  function cleanMirroredCaptionText(text) {
+    const lines = String(text || "")
+      .replace(/\r/g, "")
+      .split("\n")
+      .map(line => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    for (let size = 1; size <= Math.floor(lines.length / 2); size++) {
+      if (lines.length % size !== 0) continue;
+      const first = lines.slice(0, size).map(line => line.toLowerCase()).join("\n");
+      let repeated = true;
+      for (let i = size; i < lines.length; i += size) {
+        const chunk = lines.slice(i, i + size).map(line => line.toLowerCase()).join("\n");
+        if (chunk !== first) {
+          repeated = false;
+          break;
+        }
+      }
+      if (repeated) return lines.slice(0, size).join("\n").trim();
+    }
+    const unique = [];
+    const seen = new Set();
+    for (const line of lines) {
+      const key = line.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(line);
+    }
+    return unique.join("\n").trim();
+  }
+
   function mirrorVisibleCaptions() {
+    if (SITE.id === "hdrezka") {
+      const textTrackText = cleanMirroredCaptionText(activeTextTrackCaptions(getVideo()));
+      if (textTrackText) return textTrackText;
+    }
+
+    const readableNodes = [];
     for (const sel of SITE.captionSelectors) {
       const nodes = $$(sel);
       if (!nodes.length) continue;
+      readableNodes.push(...nodes);
+    }
+    const nodes = SITE.id === "hdrezka"
+      ? readableNodes.filter(n => {
+        const text = (n.innerText || n.textContent || "").trim();
+        if (!text || text.length < 2) return false;
+        if (n.closest("#kpds-panel, #kpds-overlay, #kpds-translate-popup, button, [role='button']")) return false;
+        const cls = String(n.className || "").toLowerCase();
+        if (/(button|control|setting|menu|quality|volume|time|progress|tooltip)/.test(cls)) return false;
+        const r = n.getBoundingClientRect();
+        if (r.width < 24 || r.height < 8) return false;
+        return (r.top + r.height / 2) > window.innerHeight * 0.35;
+      })
+      : readableNodes;
+
+    if (nodes.length) {
       const text = nodes
         .map(n => (n.innerText || n.textContent || "").trim())
         .filter(Boolean)
         .join("\n")
         .replace(/\n{2,}/g, "\n")
         .trim();
-      if (text) return text;
+      const cleanText = (SITE.id === "hdrezka" || SITE.id === "youtube") ? cleanMirroredCaptionText(text) : text;
+      if (cleanText) return cleanText;
     }
     return "";
   }
@@ -1041,6 +1378,11 @@
   function refreshTrackList() {
     const select = document.getElementById("kpds-track-select");
     if (!select) return;
+    if (SITE.id === "youtube") {
+      configureMirrorOnlyPanel();
+      setStatus("Turn on YouTube subtitles (CC) in the player.");
+      return;
+    }
     const tracks = findTrackElements();
 
     select.innerHTML = "";
@@ -1134,6 +1476,9 @@
       state.loadedSrc = capTrack?.src
         || (getVideo() && getVideo().currentSrc) || state.mediaSrc || "";
       state.loadedPrimeTitleId = capTrack?.primeTitleId || state.primeTitleId || "";
+      if ((SITE.id === "hdrezka" || SITE.id === "youtube") && SITE.trackSource === "capture") {
+        document.documentElement.classList.add("kpds-hide-native");
+      }
       const tip = state.dualTranslate ? "" : " · turn on “Show translation” for a second line";
       setStatus(`Showing ${state.selectedTrackLabel || "subtitles"} · ${cues.length} lines${tip}`);
     } catch (e) {
@@ -1297,6 +1642,52 @@
     return true;
   }
 
+  function addGenericMetadataTrack(track, sourceName) {
+    const url = normalizeTrackUrl(track?.url);
+    if (!url) return false;
+
+    const lang = String(track.lang || "").trim();
+    const label = String(track.label || "").trim() || langLabel(lang) ||
+      `Subtitles ${state.capturedTracks.length + 1}`;
+    const src = (getVideo() && getVideo().currentSrc) || state.mediaSrc || "";
+
+    const existing = state.capturedTracks.find(t => normalizeTrackUrl(t.url) === url || t.label === label);
+    if (existing) {
+      existing.label = label;
+      existing.lang = lang || existing.lang || "";
+      existing.src = src || existing.src || "";
+      existing.source = existing.source || sourceName || "metadata";
+      return false;
+    }
+
+    state.capturedTracks.push({
+      url,
+      text: "",
+      lang,
+      label,
+      cues: null,
+      src,
+      primeTitleId: "",
+      source: sourceName || "metadata"
+    });
+    return true;
+  }
+
+  function onGenericMetadata(meta) {
+    if (!meta || !Array.isArray(meta.tracks) || !meta.tracks.length) return;
+    let added = false;
+    for (const t of meta.tracks) {
+      if (addGenericMetadataTrack(t, meta.source || "metadata")) added = true;
+    }
+    if (added) {
+      refreshTrackList();
+      if (!state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
+        maybeAutoLoad();
+      }
+      setStatus(`Found ${state.capturedTracks.length} ${SITE.name} subtitle track${state.capturedTracks.length > 1 ? "s" : ""}.`);
+    }
+  }
+
   function onPrimeMetadata(meta) {
     if (!meta || !Array.isArray(meta.tracks) || !meta.tracks.length) return;
     state.lastPrimeMetaAt = Date.now();
@@ -1356,6 +1747,18 @@
     const exact = currentSrc ? metas.filter(m => m.videoSrc === currentSrc) : [];
     const candidates = exact.length ? exact : metas.sort((a, b) => (a.at || 0) - (b.at || 0)).slice(-1);
     for (const meta of candidates) onPrimeMetadata(meta);
+  }
+
+  function readCapturedSubtitleBuffer() {
+    if (SITE.trackSource !== "capture") return;
+    const nodes = $$("div.kpds-captured-sub:not([data-kpds-read])");
+    for (const node of nodes) {
+      node.setAttribute("data-kpds-read", "1");
+      const url = node.getAttribute("data-url") || "inline";
+      const lang = node.getAttribute("data-lang") || "";
+      const text = node.textContent || "";
+      onCapturedSub(url, text, lang);
+    }
   }
 
   function onCapturedSub(url, text, lang) {
@@ -1443,6 +1846,40 @@
       .catch(() => injectPageHookViaTag());
   }
 
+  function observeHdrezkaPlayerChanges() {
+    if (SITE.id !== "hdrezka" || state.hdrezkaObserver) return;
+    let timer = 0;
+    const schedule = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (SITE.trackSource !== "capture") return;
+        requestHookInjection();
+        readCapturedSubtitleBuffer();
+        refreshTrackList();
+        maybeAutoLoad();
+      }, 500);
+    };
+    try {
+      const root = document.body || document.documentElement;
+      state.hdrezkaObserver = new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes || []) {
+            if (node?.nodeType !== 1) continue;
+            if (node.matches?.("#cdnplayer, #player, iframe, video, script") ||
+                node.querySelector?.("#cdnplayer, #player, iframe, video, script")) {
+              schedule();
+              return;
+            }
+          }
+        }
+      });
+      state.hdrezkaObserver.observe(root, { childList: true, subtree: true });
+      document.addEventListener("click", (e) => {
+        if (e.target?.closest?.(".b-simple_episode__item, .b-simple_season__item, .b-translator__item")) schedule();
+      }, true);
+    } catch (e) {}
+  }
+
   function installSubtitleCapture() {
     window.addEventListener("message", (e) => {
       if (e.source !== window) return;
@@ -1452,6 +1889,8 @@
         onCapturedSub(d.url, d.text, d.lang || "");
       } else if (d.type === "prime-meta") {
         onPrimeMetadata(d);
+      } else if (d.type === "yt-meta") {
+        onGenericMetadata({ source: "youtube", tracks: d.tracks || [] });
       } else if (d.type === "prime-time") {
         const time = Number(d.time);
         if (Number.isFinite(time) && time >= 0) {
@@ -1466,6 +1905,9 @@
       }
     });
     requestHookInjection();
+    readCapturedSubtitleBuffer();
+    setInterval(readCapturedSubtitleBuffer, 1000);
+    observeHdrezkaPlayerChanges();
     if (SITE.id === "prime") {
       readPrimeMetadataSnapshots();
       setInterval(readPrimeMetadataSnapshots, 1000);
@@ -1683,7 +2125,7 @@
               <label class="kpds-file-label" for="kpds-file">
                 ${ICONS.file}<span class="kpds-file-name" id="kpds-file-name">Choose .srt / .vtt…</span>
               </label>
-              <input type="file" id="kpds-file" accept=".srt,.vtt,text/plain">
+              <input type="file" id="kpds-file" accept=".srt,.vtt,.ass,.ssa,text/plain">
             </div>
           </div>
         </div>
@@ -1787,7 +2229,7 @@
     $("#kpds-file").addEventListener("change", (e) => {
       const file = e.target.files?.[0];
       const nameEl = $("#kpds-file-name");
-      if (nameEl) nameEl.textContent = file ? file.name : "Choose .srt or .vtt…";
+      if (nameEl) nameEl.textContent = file ? file.name : "Choose .srt / .vtt…";
       loadFile(file);
     });
     $("#kpds-offset").addEventListener("input", (e) => { state.offset = Number(e.target.value || 0); saveSettingsSoon(); });
@@ -1812,6 +2254,21 @@
     refreshTrackList();
     makePanelDraggable(panel);
     syncPanelInputs();
+    configureMirrorOnlyPanel();
+  }
+
+  function configureMirrorOnlyPanel() {
+    if (SITE.id !== "youtube") return;
+    const select = $("#kpds-track-select");
+    if (select) {
+      select.innerHTML = `<option value="mirror">Use YouTube subtitles (CC)</option>`;
+      select.value = "mirror";
+    }
+    const loadBtn = document.querySelector("[data-kpds-action='load-track']");
+    if (loadBtn) {
+      loadBtn.disabled = true;
+      loadBtn.title = "Turn on YouTube subtitles (CC) in the player.";
+    }
   }
 
   function syncPanelInputs() {
@@ -1996,6 +2453,14 @@
     if (SITE.trackSource === "dom") {
       setTimeout(refreshTrackList, 1000);
       setTimeout(refreshTrackList, 3000);
+    }
+    if (SITE.trackSource === "mirror") {
+      if (SITE.id === "youtube") {
+        setStatus("YouTube detected. Turn on YouTube subtitles (CC), then they become clickable with translation.");
+        requestAnimationFrame(tick);
+        return;
+      }
+      setStatus(`${SITE.name} detected. Turn on the player's own subtitles — they become clickable with a translation.`);
     }
     requestAnimationFrame(tick);
   }

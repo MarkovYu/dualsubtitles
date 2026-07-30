@@ -1,0 +1,18 @@
+﻿{
+    "extName":  {
+                    "message":  "Dual Subtitles: Learn Languages with Movies",
+                    "description":  "Extension name shown in Chrome and the Chrome Web Store."
+                },
+    "extShortName":  {
+                         "message":  "Dual Subtitles",
+                         "description":  "Short extension name."
+                     },
+    "extDescription":  {
+                           "message":  "Dual subtitles for YouTube, Prime Video, Kino.pub \u0026 Rezka with Chrome translation, clickable words, and vocabulary.",
+                           "description":  "Short extension description shown in Chrome."
+                       },
+    "actionTitle":  {
+                        "message":  "Dual Subtitles: Learn Languages",
+                        "description":  "Toolbar button title."
+                    }
+}

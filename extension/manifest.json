@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Dual Subtitles: Learn Languages with Movies",
   "short_name": "Dual Subtitles",
-  "version": "1.25.26",
-  "description": "Dual subtitles for Prime Video & Kino.pub with Chrome built-in translation, clickable words, and a private vocabulary book.",
+  "version": "1.25.37",
+  "description": "Dual subtitles for YouTube, Prime Video, Kino.pub & Rezka with Chrome translation, clickable words, and vocabulary.",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
@@ -19,10 +19,20 @@
     "https://*.kino.pub/*",
     "https://kino.watch/*",
     "https://*.kino.watch/*",
+    "https://hdrezka.co/*",
+    "https://*.hdrezka.co/*",
+    "https://rezka.ag/*",
+    "https://*.rezka.ag/*",
+    "https://hello-rezka.tv/*",
+    "https://*.hello-rezka.tv/*",
     "https://cdn2site.com/*",
     "https://*.cdn2site.com/*",
     "https://digital-cdn.net/*",
     "https://*.digital-cdn.net/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://*.youtube.com/*",
+    "https://youtu.be/*",
     "https://www.primevideo.com/*",
     "https://*.primevideo.com/*",
     "https://www.amazon.de/*",
@@ -44,6 +54,41 @@
         "https://*.kino.pub/item/view/*",
         "https://kino.watch/item/view/*",
         "https://*.kino.watch/item/view/*",
+        "https://hdrezka.co/*",
+        "https://*.hdrezka.co/*",
+        "https://rezka.ag/*",
+        "https://*.rezka.ag/*",
+        "https://hello-rezka.tv/*",
+        "https://*.hello-rezka.tv/*",
+        "https://www.primevideo.com/*",
+        "https://*.primevideo.com/*",
+        "https://www.amazon.de/*",
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*"
+      ],
+      "js": [
+        "inject.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://kino.pub/item/view/*",
+        "https://*.kino.pub/item/view/*",
+        "https://kino.watch/item/view/*",
+        "https://*.kino.watch/item/view/*",
+        "https://hdrezka.co/*",
+        "https://*.hdrezka.co/*",
+        "https://rezka.ag/*",
+        "https://*.rezka.ag/*",
+        "https://hello-rezka.tv/*",
+        "https://*.hello-rezka.tv/*",
+        "https://www.youtube.com/*",
+        "https://youtube.com/*",
+        "https://*.youtube.com/*",
+        "https://youtu.be/*",
         "https://www.primevideo.com/*",
         "https://*.primevideo.com/*",
         "https://www.amazon.de/*",
@@ -56,7 +101,8 @@
       "css": [
         "content.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [

@@ -181,8 +181,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         try {
           // Privileged MAIN-world injection: not subject to the page CSP and
           // doesn't require a (possibly fatal) "world" key in the manifest.
+          const target = Number.isInteger(sender?.frameId)
+            ? { tabId, frameIds: [sender.frameId] }
+            : { tabId };
           await chrome.scripting.executeScript({
-            target: { tabId },
+            target,
             world: "MAIN",
             files: ["inject.js"]
           });
