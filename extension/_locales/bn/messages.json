@@ -8,7 +8,7 @@
                          "description":  "Short extension name."
                      },
     "extDescription":  {
-                           "message":  "Dual subtitles for YouTube, Prime Video, Kino.pub \u0026 Rezka with Chrome translation, clickable words, and vocabulary.",
+                           "message":  "Dual subtitles for supported video sites with browser translation, clickable words, and local vocabulary.",
                            "description":  "Short extension description shown in Chrome."
                        },
     "actionTitle":  {

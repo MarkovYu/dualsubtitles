@@ -21,6 +21,7 @@
     currentPopupPayload: null,
     loadedCache: new Map(),
     dualTranslate: false,
+    subtitlesEnabled: false,
     dualCache: new Map(),
     failedTranslations: new Map(),
     pending: new Set(),
@@ -463,7 +464,7 @@
     if (!state.panelHidden) {
       createPanel();
       syncPanelInputs();
-      setStatus(`${SITE.name} panel restored.`);
+      setStatus("Panel restored.");
     }
     applyPanelHidden();
     saveSettingsSoon();
@@ -474,6 +475,34 @@
     state.failedTranslations.clear();
     state.pending.clear();
     state.lastText = "";
+  }
+
+  function syncSubtitleControls() {
+    const subs = $("#kpds-subs-enabled");
+    const mirror = $("#kpds-mirror-enabled");
+    if (subs) subs.checked = !!(state.subtitlesEnabled && state.mode !== "mirror");
+    if (mirror) mirror.checked = !!(state.subtitlesEnabled && state.mode === "mirror");
+  }
+
+  function setSubtitlesEnabled(enabled, message) {
+    state.subtitlesEnabled = !!enabled;
+    if (!state.subtitlesEnabled) {
+      state.lastText = "";
+      document.documentElement.classList.remove("kpds-hide-native");
+      renderSubtitle("");
+      if (message) setStatus(message);
+    } else if (state.mode === "mirror") {
+      document.documentElement.classList.add("kpds-hide-native");
+    }
+    syncSubtitleControls();
+  }
+
+  function enableMirrorSubtitles() {
+    state.subtitlesEnabled = true;
+    state.lastText = "";
+    setMode("mirror");
+    syncSubtitleControls();
+    setStatus(`Mirroring ${SITE.name} captions. Tap a word to translate.`);
   }
 
   // Identifies the current title so we can detect SPA navigation between films.
@@ -506,6 +535,7 @@
     state.selectedTrackLabel = "";
     state.loaded = false;
     state.autoLoaded = false;
+    state.subtitlesEnabled = false;
     state.trackLang = "";
     state.loadedSrc = "";
     state.loadedPrimeTitleId = "";
@@ -566,6 +596,7 @@
     let tries = 0, capSeen = 0;
     state.recoverIv = setInterval(() => {
       tries++;
+      if (!state.subtitlesEnabled) { clearInterval(state.recoverIv); state.recoverIv = 0; return; }
       if (state.mode === "mirror" || state.cues.length) { clearInterval(state.recoverIv); state.recoverIv = 0; return; }
       maybeAutoLoad();
       if (state.cues.length) { clearInterval(state.recoverIv); state.recoverIv = 0; return; }
@@ -610,6 +641,7 @@
     state.selectedTrackLabel = "";
     state.loaded = false;
     state.autoLoaded = false;
+    state.subtitlesEnabled = false;
     state.mismatchFrames = 0;
     state.loadedSrc = "";
     state.loadedPrimeTitleId = "";
@@ -629,7 +661,8 @@
     state.mode = mode;
     // In mirror mode we read the site's own captions, so dim them visually
     // (opacity keeps innerText readable) and show only our clickable overlay.
-    document.documentElement.classList.toggle("kpds-hide-native", mode === "mirror");
+    document.documentElement.classList.toggle("kpds-hide-native", state.subtitlesEnabled && mode === "mirror");
+    syncSubtitleControls();
   }
 
   function escapeHtml(s) {
@@ -668,6 +701,7 @@
 
   function renderSubtitle(text) {
     const overlay = ensureOverlay();
+    if (!state.subtitlesEnabled && text) text = "";
     if (!text) {
       overlay.innerHTML = "";
       state.lastText = "";
@@ -1311,6 +1345,12 @@
         }
       }
 
+      if (!state.subtitlesEnabled) {
+        renderSubtitle("");
+        requestAnimationFrame(tick);
+        return;
+      }
+
       let text = "";
       if (state.mode === "mirror") {
         text = mirrorVisibleCaptions();
@@ -1384,6 +1424,7 @@
       return;
     }
     const tracks = findTrackElements();
+    const previous = state.selectedTrackUrl;
 
     select.innerHTML = "";
     for (const t of tracks) {
@@ -1398,12 +1439,15 @@
     }
 
     if (tracks.length) {
+      if (previous && tracks.some(t => t.url === previous)) select.value = previous;
       state.selectedTrackUrl = select.value;
       state.selectedTrackLabel = select.selectedOptions[0]?.dataset?.label || "";
-      if (!state.cues.length && !state.autoLoaded) {
+      if (state.subtitlesEnabled && !state.cues.length && !state.autoLoaded) {
         setStatus(`Found ${tracks.length} track${tracks.length > 1 ? "s" : ""} · loading…`);
+        maybeAutoLoad();
+      } else if (!state.subtitlesEnabled) {
+        setStatus(`Found ${tracks.length} track${tracks.length > 1 ? "s" : ""}. Choose one and turn subtitles on.`);
       }
-      maybeAutoLoad();
     } else if (SITE.trackSource === "capture") {
       setStatus("No tracks yet. Turn subtitles ON in the player once to capture them.");
     } else {
@@ -1421,7 +1465,9 @@
       return;
     }
 
+    state.subtitlesEnabled = true;
     setMode("site");
+    syncSubtitleControls();
     state.selectedTrackUrl = url;
     state.selectedTrackLabel =
       (select && select.selectedOptions[0]?.dataset?.label) ||
@@ -1681,7 +1727,7 @@
     }
     if (added) {
       refreshTrackList();
-      if (!state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
+      if (state.subtitlesEnabled && !state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
         maybeAutoLoad();
       }
       setStatus(`Found ${state.capturedTracks.length} ${SITE.name} subtitle track${state.capturedTracks.length > 1 ? "s" : ""}.`);
@@ -1723,7 +1769,7 @@
     }
     if (added || titleChanged || videoSrcChanged) {
       refreshTrackList();
-      if (!state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
+      if (state.subtitlesEnabled && !state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
         maybeAutoLoad();
       }
       if (state.capturedTracks.length) {
@@ -1804,7 +1850,7 @@
     refreshTrackList();
 
     // Auto-show this track immediately (don't depend on the <select> value).
-    if (!state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
+    if (state.subtitlesEnabled && !state.cues.length && state.mode !== "mirror" && state.mode !== "file") {
       state.autoLoaded = true;
       state.selectedTrackUrl = url;
       const sel = $("#kpds-track-select");
@@ -1816,6 +1862,7 @@
   // Show subtitles automatically once a track is available, so the user
   // never has to hunt for the "Show" button. They can still switch tracks.
   function maybeAutoLoad() {
+    if (!state.subtitlesEnabled) return;
     if (state.autoLoaded || state.cues.length) return;
     if (state.mode === "mirror" || state.mode === "file") return;
     const sel = $("#kpds-track-select");
@@ -2109,16 +2156,37 @@
 
         <div class="kpds-guide" id="kpds-status">Ready.</div>
 
+        <div class="kpds-quick-actions">
+          <button type="button" class="kpds-tool-btn" data-kpds-action="open-vocabulary" title="Open vocabulary">${ICONS.book}<span>Vocabulary</span></button>
+          <button type="button" class="kpds-tool-btn danger" data-kpds-action="hide-panel" title="Hide the control panel. Subtitles stay visible.">${ICONS.eyeOff}<span>Hide</span></button>
+        </div>
+
         <div class="kpds-section">
           <span class="kpds-section-label"><span class="kpds-step">1</span>Subtitles</span>
           <div class="kpds-row kpds-inline">
             <select id="kpds-track-select"></select>
             <button type="button" class="kpds-icon-btn bordered" data-kpds-action="refresh-tracks" title="Reload subtitles (re-detect, or mirror the player's own)">${ICONS.refresh}</button>
           </div>
-          <div class="kpds-grid2 kpds-row">
-            <button type="button" class="kpds-btn" data-kpds-action="load-track">${ICONS.download}Show subtitles</button>
-            <button type="button" class="kpds-btn ghost" data-kpds-action="mirror" title="Read the subtitles the player already shows and make them clickable">Replace player subs</button>
-          </div>
+          <label class="kpds-switch-row kpds-row kpds-toggle-card">
+            <span class="kpds-toggle-copy">
+              <span class="kpds-toggle-title">Selected track</span>
+              <span class="kpds-toggle-hint">Show chosen subtitles</span>
+            </span>
+            <span class="kpds-switch">
+              <input type="checkbox" id="kpds-subs-enabled">
+              <span class="track"></span><span class="thumb"></span>
+            </span>
+          </label>
+          <label class="kpds-switch-row kpds-row kpds-toggle-card">
+            <span class="kpds-toggle-copy">
+              <span class="kpds-toggle-title">Player captions</span>
+              <span class="kpds-toggle-hint">Replace visible captions</span>
+            </span>
+            <span class="kpds-switch">
+              <input type="checkbox" id="kpds-mirror-enabled">
+              <span class="track"></span><span class="thumb"></span>
+            </span>
+          </label>
           <div class="kpds-disclosure" id="kpds-more-src">
             <button type="button" class="kpds-disclosure-btn" data-kpds-action="toggle-src">${ICONS.chevron}Load a file instead</button>
             <div class="kpds-disclosure-content">
@@ -2208,10 +2276,6 @@
               </label>
             </div>
           </div>
-          <div class="kpds-grid2 kpds-row">
-            <button type="button" class="kpds-btn secondary" data-kpds-action="open-vocabulary">${ICONS.book}Vocabulary</button>
-            <button type="button" class="kpds-btn danger" data-kpds-action="hide-panel" title="Hide the control panel. Subtitles stay visible.">${ICONS.eyeOff}Hide panel</button>
-          </div>
           <button type="button" class="kpds-btn ghost kpds-row" data-kpds-action="report-bug">${ICONS.bug}Report a bug</button>
         </div>
       </div>
@@ -2223,8 +2287,26 @@
     $("#kpds-track-select")?.addEventListener("change", (e) => {
       state.selectedTrackUrl = e.target.value;
       state.selectedTrackLabel = e.target.selectedOptions[0]?.dataset?.label || "";
-      // Picking a language shows it right away — no extra click needed.
-      loadSelectedTrack();
+      if (state.subtitlesEnabled && state.mode !== "mirror") {
+        loadSelectedTrack();
+      } else {
+        setStatus(`${state.selectedTrackLabel || "Subtitles"} selected. Turn subtitles on to show them.`);
+      }
+    });
+    $("#kpds-subs-enabled")?.addEventListener("change", async (e) => {
+      if (e.target.checked) {
+        if (SITE.trackSource === "mirror") {
+          enableMirrorSubtitles();
+        } else {
+          await loadSelectedTrack();
+        }
+      } else {
+        setSubtitlesEnabled(false, "Subtitles hidden.");
+      }
+    });
+    $("#kpds-mirror-enabled")?.addEventListener("change", (e) => {
+      if (e.target.checked) enableMirrorSubtitles();
+      else setSubtitlesEnabled(false, "Player subtitles restored.");
     });
     $("#kpds-file").addEventListener("change", (e) => {
       const file = e.target.files?.[0];
@@ -2264,11 +2346,7 @@
       select.innerHTML = `<option value="mirror">Use YouTube subtitles (CC)</option>`;
       select.value = "mirror";
     }
-    const loadBtn = document.querySelector("[data-kpds-action='load-track']");
-    if (loadBtn) {
-      loadBtn.disabled = true;
-      loadBtn.title = "Turn on YouTube subtitles (CC) in the player.";
-    }
+    syncSubtitleControls();
   }
 
   function syncPanelInputs() {
@@ -2284,6 +2362,7 @@
     set("#kpds-bottom", state.bottom);
     check("#kpds-clickable", state.clickable);
     check("#kpds-dual", state.dualTranslate);
+    syncSubtitleControls();
   }
 
   // Prime Video is a SPA and rewrites the DOM on navigation, which can remove
@@ -2345,13 +2424,13 @@
           reloadSubtitles();
         }
         else if (action === "load-track") await loadSelectedTrack();
-        else if (action === "mirror") { setMode("mirror"); setStatus(`Mirroring ${SITE.name} captions. Tap a word to translate.`); }
+        else if (action === "mirror") enableMirrorSubtitles();
         else if (action === "auto-sync") await autoSync();
         else if (action === "minimize") $("#kpds-panel")?.classList.toggle("kpds-minimized");
         else if (action === "toggle-advanced") $("#kpds-advanced")?.classList.toggle("open");
         else if (action === "toggle-src") $("#kpds-more-src")?.classList.toggle("open");
         else if (action === "toggle-display") $("#kpds-display")?.classList.toggle("open");
-        else if (action === "hide-overlay") { state.cues = []; setMode("off"); renderSubtitle(""); setStatus("Subtitles hidden."); }
+        else if (action === "hide-overlay") setSubtitlesEnabled(false, "Subtitles hidden.");
         else if (action === "hide-panel") setPanelHidden(true);
         else if (action === "close-popup") hidePopup();
         else if (action === "save-word") await saveCurrentWord();
